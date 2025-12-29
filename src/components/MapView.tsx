@@ -452,7 +452,7 @@ export default function MapView({ fences, perimeters, pins, companies, onCreateP
       </Map>
 
       {/* Custom Controls */}
-      <div className="absolute bottom-6 left-1/2 transform -translate-x-1/2 z-10 bg-white rounded-full shadow-xl px-6 py-3 flex items-center space-x-4 border border-gray-200">
+      <div className="absolute bottom-6 left-1/2 transform -translate-x-1/2 z-10 bg-white rounded-full shadow-xl px-8 py-3 mb-4 flex items-center space-x-4 border border-gray-200">
         <button 
           className={`flex flex-col items-center space-y-1 ${drawMode === 'polygon' ? 'text-orange-500' : 'text-gray-600 hover:text-orange-500'}`}
           onClick={() => startDrawing('polygon')}

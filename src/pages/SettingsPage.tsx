@@ -58,8 +58,8 @@ export default function SettingsPage() {
 
   return (
     <div className="p-6 max-w-5xl mx-auto">
-      <h1 className="text-2xl font-bold text-gray-900 mb-2">Configurações</h1>
-      <p className="text-gray-500 mb-6">Configure os serviços necessários para o funcionamento do aplicativo</p>
+      <h1 className="text-2xl font-bold text-gray-900 mb-2 text-left">Configurações</h1>
+      <p className="text-gray-500 mb-6 text-left">Configure os serviços necessários para o funcionamento do aplicativo</p>
 
       <Tabs.Root defaultValue="mapbox" className="w-full">
         <Tabs.List className="flex border-b border-gray-200 mb-6 bg-gray-50 rounded-t-lg">
@@ -138,7 +138,7 @@ export default function SettingsPage() {
             <div className="flex items-start gap-3 mb-6">
               <Layers className="w-6 h-6 text-gray-700 mt-1" />
               <div>
-                <h3 className="text-lg font-bold text-gray-900">Estilo do Mapa</h3>
+                <h3 className="text-lg font-bold text-gray-900 text-left">Estilo do Mapa</h3>
                 <p className="text-gray-500 text-sm mt-1">Escolha a aparência padrão do mapa</p>
               </div>
             </div>
