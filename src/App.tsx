@@ -12,6 +12,7 @@ import OrganizationPage from './pages/OrganizationPage'
 import RulesPage from './pages/RulesPage'
 import EventsPage from './pages/EventsPage'
 import FencesPage from './pages/FencesPage'
+import FenceEditPage from './pages/FenceEditPage'
 import SettingsPage from './pages/SettingsPage'
 
 // Serviços
@@ -42,6 +43,10 @@ function App() {
     wsService.on('fence_created', loadData);
     wsService.on('fence_updated', loadData);
     wsService.on('fence_deleted', loadData);
+    wsService.on('perimeter_updated', (data) => {
+        console.log('[App] WS perimeter_updated received:', data);
+        loadPerimeters();
+    });
     
     wsService.on('rule_update', loadRules);
     
@@ -52,6 +57,7 @@ function App() {
       wsService.off('fence_created', loadData);
       wsService.off('fence_updated', loadData);
       wsService.off('fence_deleted', loadData);
+      wsService.off('perimeter_updated', loadData); // Isso removerá qualquer listener genérico se houver
       wsService.off('rule_update', loadRules);
     };
   }, []);
@@ -76,7 +82,9 @@ function App() {
 
   const loadPerimeters = async () => {
     try {
+      console.log('[App] Loading perimeters...');
       const data = await dbService.getAllPerimeters();
+      console.log('[App] Loaded perimeters:', data.length);
       setPerimeters(data);
     } catch (error) {
       console.error('Erro ao carregar perímetros:', error);
@@ -130,7 +138,7 @@ function App() {
   };
 
   const handleDeleteRule = async (id: number) => {
-    await dbService.delete('rules', id);
+    await dbService.deleteRule(id);
     loadRules();
   };
 
@@ -143,10 +151,84 @@ function App() {
   };
 
   const handleDeleteFence = async (id: number) => {
-    // TODO: Deletar perimeters/rules/pins em cascata
-    await dbService.delete('fences', id);
-    loadFences();
-    loadPerimeters(); // Recarregar perimetros pois podem ter ficado orfãos (se não deletados)
+    if (!confirm('Tem certeza que deseja excluir esta cerca? Todas as regras, perímetros e eventos associados serão excluídos.')) return;
+
+    try {
+        // Cascade delete
+        const fencePerimeters = await dbService.getPerimetersByFence(id);
+        for (const p of fencePerimeters) {
+            await dbService.deletePerimeter(p.id);
+        }
+
+        const fenceRules = await dbService.getRulesByFence(id);
+        for (const r of fenceRules) {
+            await dbService.deleteRule(r.id);
+        }
+
+        const fencePins = await dbService.getPinsByFence(id);
+        for (const p of fencePins) {
+            await dbService.deletePin(p.id);
+        }
+
+        await dbService.deleteFence(id);
+        
+        loadData(); // Reload all data to ensure consistency
+    } catch (error) {
+        console.error('Erro ao excluir cerca:', error);
+        alert('Erro ao excluir cerca');
+    }
+  };
+
+  const handleUpdatePerimeter = async (perimeterId: number, coordinates: number[][]) => {
+    try {
+      console.log('[App] handleUpdatePerimeter:', perimeterId);
+      const perimeter = perimeters.find(p => p.id === perimeterId);
+      if (perimeter) {
+        const updatedPerimeter = {
+          ...perimeter,
+          coordinates: coordinates
+        };
+        
+        // Atualização Otimista
+        setPerimeters(prev => prev.map(p => p.id === perimeterId ? updatedPerimeter : p));
+        
+        await dbService.updatePerimeter(updatedPerimeter);
+        console.log('[App] Perimeter updated in DB');
+        
+        // Recarregar para garantir consistência e disparar eventos
+        // loadPerimeters(); // Não estritamente necessário se a otimista estiver correta, mas bom para garantir
+        
+        wsService.sendMessage('perimeter_updated', { perimeterId });
+      }
+    } catch (error) {
+      console.error('Erro ao atualizar perímetro:', error);
+      alert('Erro ao atualizar perímetro');
+      loadPerimeters(); // Reverter em caso de erro
+    }
+  };
+
+  const handleDeletePerimeter = async (id: number) => {
+    try {
+      await dbService.deletePerimeter(id);
+      loadPerimeters();
+    } catch (error) {
+      console.error('Erro ao deletar perímetro:', error);
+      alert('Erro ao deletar perímetro');
+    }
+  };
+
+  const handleAddPerimeter = async (fenceId: number, perimeter: Omit<Perimeter, 'id' | 'fenceId' | 'createdAt'>) => {
+    try {
+      await dbService.addPerimeter({
+        ...perimeter,
+        fenceId,
+        createdAt: new Date().toISOString()
+      });
+      loadPerimeters();
+    } catch (error) {
+      console.error('Erro ao adicionar perímetro:', error);
+      alert('Erro ao adicionar perímetro');
+    }
   };
 
   const handleCreatePin = async (pin: Omit<GeofencePin, 'id' | 'createdAt'>) => {
@@ -175,7 +257,7 @@ function App() {
   const handleDeleteCompany = async (id: number) => {
     // TODO: Adicionar confirmação
     // TODO: Deletar filiais em cascata (idealmente no backend/serviço)
-    await dbService.delete('companies', id); // Usando método genérico por enquanto ou adicionar específico
+    await dbService.deleteCompany(id);
     loadCompanies();
   };
 
@@ -202,6 +284,8 @@ function App() {
                  rules={rules}
                  onCreatePin={handleCreatePin}
                  onDeleteFence={handleDeleteFence}
+                 onDeletePerimeter={handleDeletePerimeter}
+                 onUpdatePerimeter={handleUpdatePerimeter}
                  onRefresh={loadData}
                />
              } />
@@ -228,10 +312,16 @@ function App() {
                <FencesPage 
                  fences={fences}
                  perimeters={perimeters}
+                 companies={companies}
                  onUpdateFence={handleUpdateFence}
                  onDeleteFence={handleDeleteFence}
+                 onDeletePerimeter={handleDeletePerimeter}
+                 onUpdatePerimeter={handleUpdatePerimeter}
+                 onAddPerimeter={handleAddPerimeter}
                />
              } />
+
+             <Route path="/fences/:id/edit" element={<FenceEditPage />} />
              
              <Route path="/events" element={
                <EventsPage 

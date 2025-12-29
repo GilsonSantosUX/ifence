@@ -16,14 +16,14 @@ const DrawControl = forwardRef<DrawControlRef, DrawControlProps>((props, ref) =>
   const draw = useControl<MapboxDraw>(
     () => new MapboxDraw(props),
     ({ map }: { map: any }) => {
-      map.on('draw.create', props.onCreate);
-      map.on('draw.update', props.onUpdate);
-      map.on('draw.delete', props.onDelete);
+      if (props.onCreate) map.on('draw.create', props.onCreate);
+      if (props.onUpdate) map.on('draw.update', props.onUpdate);
+      if (props.onDelete) map.on('draw.delete', props.onDelete);
     },
     ({ map }: { map: any }) => {
-      map.off('draw.create', props.onCreate);
-      map.off('draw.update', props.onUpdate);
-      map.off('draw.delete', props.onDelete);
+      if (props.onCreate) map.off('draw.create', props.onCreate);
+      if (props.onUpdate) map.off('draw.update', props.onUpdate);
+      if (props.onDelete) map.off('draw.delete', props.onDelete);
     },
     {
       position: props.position,

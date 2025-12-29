@@ -1,0 +1,122 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+  previewFeatures = ["driverAdapters"]
+}
+
+datasource db {
+  provider = "sqlite"
+}
+
+model Company {
+  id        Int      @id @default(autoincrement())
+  name      String
+  cnpj      String?
+  address   String?
+  contact   String?
+  createdAt DateTime @default(now())
+  
+  branches  Branch[]
+  geofences Geofence[]
+}
+
+model Branch {
+  id        Int      @id @default(autoincrement())
+  companyId Int
+  name      String
+  address   String?
+  createdAt DateTime @default(now())
+
+  company     Company      @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  departments Department[]
+}
+
+model Department {
+  id          Int      @id @default(autoincrement())
+  branchId    Int
+  name        String
+  description String?
+  createdAt   DateTime @default(now())
+
+  branch    Branch     @relation(fields: [branchId], references: [id], onDelete: Cascade)
+  people    Person[]
+  geofences Geofence[]
+}
+
+model Person {
+  id           Int      @id @default(autoincrement())
+  departmentId Int
+  name         String
+  email        String?  @unique
+  role         String   @default("viewer") // admin, manager, viewer
+  createdAt    DateTime @default(now())
+
+  department   Department    @relation(fields: [departmentId], references: [id], onDelete: Cascade)
+  responsiblePins GeofencePin[]
+}
+
+model Geofence {
+  id           Int      @id @default(autoincrement())
+  companyId    Int?
+  departmentId Int?
+  name         String
+  description  String?
+  color        String
+  status       String   @default("active") // active, inactive
+  createdAt    DateTime @default(now())
+
+  company      Company?    @relation(fields: [companyId], references: [id])
+  department   Department? @relation(fields: [departmentId], references: [id])
+  
+  perimeters   Perimeter[]
+  rules        Rule[]
+  pins         GeofencePin[]
+}
+
+model Perimeter {
+  id          Int      @id @default(autoincrement())
+  fenceId     Int
+  name        String?
+  type        String   // polygon, circle
+  coordinates Json?    // [[lat, lng], ...]
+  center      Json?    // [lat, lng]
+  radius      Float?
+  createdAt   DateTime @default(now())
+
+  fence       Geofence @relation(fields: [fenceId], references: [id], onDelete: Cascade)
+}
+
+model Rule {
+  id           Int      @id @default(autoincrement())
+  fenceId      Int
+  name         String
+  condition    String   // enter, exit, inside, outside
+  action       String   // notify, alert, block, custom
+  actionConfig Json?
+  isDefault    Boolean  @default(false)
+  createdAt    DateTime @default(now())
+
+  fence        Geofence @relation(fields: [fenceId], references: [id], onDelete: Cascade)
+}
+
+model GeofencePin {
+  id            Int      @id @default(autoincrement())
+  fenceId       Int
+  responsibleId Int?
+  name          String
+  coordinates   Json     // [lat, lng]
+  status        String   @default("pending") // pending, in_progress, completed, canceled
+  dueDate       DateTime?
+  actionType    String?
+  createdAt     DateTime @default(now())
+
+  fence         Geofence @relation(fields: [fenceId], references: [id], onDelete: Cascade)
+  responsible   Person?  @relation(fields: [responsibleId], references: [id])
+}
+
+model AppSettings {
+  id    String @id
+  value Json
+}

@@ -1,5 +1,31 @@
 # React + TypeScript + Vite
 
+## Configuração
+
+Para executar o projeto, é necessário configurar as variáveis de ambiente para a integração com o Mapbox.
+
+1. Crie um arquivo `.env` na raiz do projeto (se não existir).
+2. Adicione a variável `VITE_MAPBOX_API` com seu token público do Mapbox:
+
+```env
+VITE_MAPBOX_API=pk.eyJ1Ijoi...
+```
+
+> **Nota:** O token é carregado automaticamente durante a inicialização. Se não estiver configurado, o mapa não será exibido e uma mensagem de erro será mostrada.
+
+## Funcionalidades
+
+### Configurações (Settings)
+A aplicação possui um painel de configurações acessível onde é possível gerenciar:
+
+*   **Mapbox:** Seleção de estilos de mapa (Satélite, Ruas, Claro, Escuro, 3D).
+*   **WebSocket:** Configuração da URL do servidor para atualizações em tempo real e teste de conexão.
+*   **Dados:**
+    *   **Exportar Backup:** Gera um arquivo JSON com todos os dados locais.
+    *   **Restaurar Backup:** Importa dados de um arquivo JSON.
+    *   **Diagnóstico:** Executa testes de integração para verificar a integridade do banco de dados e serviços.
+    *   **Limpar Tudo:** Remove todos os dados armazenados localmente.
+
 This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
 
 Currently, two official plugins are available:

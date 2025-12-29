@@ -92,3 +92,12 @@ input.mapboxgl-ctrl-geocoder--input {
   padding-left: 2px;
   padding-bottom: 2px;
 }
+
+/* Mapbox Popup Close Button Overrides */
+button.mapboxgl-popup-close-button {
+  width: fit-content;
+  padding-top: 2px;
+  padding-bottom: 2px;
+  padding-left: 12px;
+  padding-right: 12px;
+}

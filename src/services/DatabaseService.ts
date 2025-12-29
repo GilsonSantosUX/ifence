@@ -1,5 +1,3 @@
-import { openDB } from 'idb';
-
 // --- Entidades Organizacionais ---
 
 export interface Company {
@@ -40,18 +38,20 @@ export interface Person {
 
 export interface Geofence {
   id: number;
-  departmentId?: number; // Opcional, se não usar hierarquia completa ainda
-  companyId?: number; // Adicionado para vincular à organização
+  departmentId?: number;
+  companyId?: number;
   name: string;
   description?: string;
   color: string;
+  status: 'active' | 'inactive';
   createdAt: string;
-  // Perímetros são buscados separadamente ou podem ser incluídos na UI
+  perimeters?: Perimeter[];
 }
 
 export interface Perimeter {
   id: number;
   fenceId: number;
+  name?: string;
   type: 'polygon' | 'circle';
   coordinates?: number[][]; // Para polígonos: [[lat, lng], ...]
   center?: [number, number]; // Para círculos: [lat, lng]
@@ -62,7 +62,7 @@ export interface Perimeter {
 export interface GeofencePin {
   id: number;
   fenceId: number;
-  responsibleId?: number; // Person ID
+  responsibleId?: number;
   name: string;
   coordinates: [number, number];
   status: 'pending' | 'in_progress' | 'completed' | 'canceled';
@@ -71,194 +71,174 @@ export interface GeofencePin {
   createdAt: string;
 }
 
-// Interface antiga mantida para compatibilidade durante migração, se necessário, 
-// mas o ideal é atualizar o código para usar Geofence + Perimeter.
-// Vamos redefinir Rule para apontar para Geofence
 export interface Rule {
   id: number;
   fenceId: number;
   name: string;
   condition: 'enter' | 'exit' | 'inside' | 'outside';
   action: 'notify' | 'alert' | 'block' | 'custom';
-  actionConfig?: any; // Configuração extra da ação
+  actionConfig?: any;
   isDefault?: boolean;
   createdAt: string;
 }
 
 export interface AppSettings {
-  id: string; // 'mapbox' | 'general' etc.
+  id: string;
   value: any;
 }
 
+const API_URL = 'http://localhost:3000/api';
+
 class DatabaseService {
-  private dbPromise: Promise<any>;
-
-  constructor() {
-    this.dbPromise = openDB('ifence-db', 3, { // Versão 3
-      upgrade(db, oldVersion) {
-        // --- Versão 1 (Legado) ---
-        if (oldVersion < 1) {
-          if (!db.objectStoreNames.contains('fences')) {
-            const fenceStore = db.createObjectStore('fences', { keyPath: 'id' });
-            fenceStore.createIndex('name', 'name', { unique: false });
-            fenceStore.createIndex('createdAt', 'createdAt', { unique: false });
-          }
-          if (!db.objectStoreNames.contains('rules')) {
-            const ruleStore = db.createObjectStore('rules', { keyPath: 'id' });
-            ruleStore.createIndex('fenceId', 'fenceId', { unique: false });
-          }
-        }
-
-        // --- Versão 2 (PRD Completo) ---
-        if (oldVersion < 2) {
-            // Organizacional
-            if (!db.objectStoreNames.contains('companies')) {
-                db.createObjectStore('companies', { keyPath: 'id' });
-            }
-            if (!db.objectStoreNames.contains('branches')) {
-                const store = db.createObjectStore('branches', { keyPath: 'id' });
-                store.createIndex('companyId', 'companyId');
-            }
-            if (!db.objectStoreNames.contains('departments')) {
-                const store = db.createObjectStore('departments', { keyPath: 'id' });
-                store.createIndex('branchId', 'branchId');
-            }
-            if (!db.objectStoreNames.contains('people')) {
-                const store = db.createObjectStore('people', { keyPath: 'id' });
-                store.createIndex('departmentId', 'departmentId');
-            }
-
-            // Geofencing (Novas estruturas)
-            if (!db.objectStoreNames.contains('perimeters')) {
-                const store = db.createObjectStore('perimeters', { keyPath: 'id' });
-                store.createIndex('fenceId', 'fenceId');
-            }
-            if (!db.objectStoreNames.contains('geofence_pins')) {
-                const store = db.createObjectStore('geofence_pins', { keyPath: 'id' });
-                store.createIndex('fenceId', 'fenceId');
-            }
-        }
-        
-        // --- Versão 3 (Settings) ---
-        if (oldVersion < 3) {
-             if (!db.objectStoreNames.contains('settings')) {
-                db.createObjectStore('settings', { keyPath: 'id' });
-             }
-        }
-      },
+  
+  private async fetch<T>(endpoint: string, options?: RequestInit): Promise<T> {
+    const response = await fetch(`${API_URL}${endpoint}`, {
+      ...options,
+      headers: {
+        'Content-Type': 'application/json',
+        ...options?.headers
+      }
     });
-  }
-
-  // --- Métodos Genéricos Auxiliares ---
-  private async getAll<T>(storeName: string): Promise<T[]> {
-      const db = await this.dbPromise;
-      return db.getAll(storeName);
-  }
-
-  private async add<T>(storeName: string, item: T): Promise<number> {
-      const db = await this.dbPromise;
-      const id = Date.now() + Math.floor(Math.random() * 1000);
-      await db.add(storeName, { ...item, id });
-      return id;
-  }
-
-  private async put<T>(storeName: string, item: T): Promise<void> {
-      const db = await this.dbPromise;
-      await db.put(storeName, item);
-  }
-
-  public async delete(storeName: string, id: number): Promise<void> {
-      const db = await this.dbPromise;
-      await db.delete(storeName, id);
-  }
-
-  private async getByIndex<T>(storeName: string, indexName: string, value: any): Promise<T[]> {
-      const db = await this.dbPromise;
-      return db.getAllFromIndex(storeName, indexName, value);
+    if (!response.ok) {
+      throw new Error(`API Error: ${response.statusText}`);
+    }
+    // Handle 204 No Content
+    if (response.status === 204) return {} as T;
+    return response.json();
   }
 
   // --- Settings ---
   async getSettings(id: string): Promise<AppSettings | undefined> {
-    const db = await this.dbPromise;
-    return db.get('settings', id);
+    try {
+      return await this.fetch<AppSettings>(`/settings/${id}`);
+    } catch (e) {
+      return undefined;
+    }
   }
 
   async saveSettings(settings: AppSettings): Promise<void> {
-    const db = await this.dbPromise;
-    await db.put('settings', settings);
+    // Check if exists, update or create
+    try {
+        await this.fetch(`/settings/${settings.id}`, {
+            method: 'PUT',
+            body: JSON.stringify(settings)
+        });
+    } catch {
+        await this.fetch(`/settings`, {
+            method: 'POST',
+            body: JSON.stringify(settings)
+        });
+    }
   }
 
   // --- Companies ---
-  async getCompanies() { return this.getAll<Company>('companies'); }
-  async addCompany(item: Omit<Company, 'id'>) { return this.add('companies', item); }
+  async getCompanies() { return this.fetch<Company[]>('/companies'); }
+  async addCompany(item: Omit<Company, 'id'>) { 
+      const res = await this.fetch<Company>('/companies', { method: 'POST', body: JSON.stringify(item) });
+      return res.id;
+  }
+  async deleteCompany(id: number) { await this.fetch(`/companies/${id}`, { method: 'DELETE' }); }
 
   // --- Branches ---
-  async getBranches() { return this.getAll<Branch>('branches'); }
-  async getBranchesByCompany(companyId: number) { return this.getByIndex<Branch>('branches', 'companyId', companyId); }
-  async addBranch(item: Omit<Branch, 'id'>) { return this.add('branches', item); }
+  async getBranches() { return this.fetch<Branch[]>('/branches'); }
+  async getBranchesByCompany(companyId: number) { return this.fetch<Branch[]>(`/branches?companyId=${companyId}`); }
+  async addBranch(item: Omit<Branch, 'id'>) { 
+      const res = await this.fetch<Branch>('/branches', { method: 'POST', body: JSON.stringify(item) });
+      return res.id;
+  }
 
-  // --- Geofences (Updated) ---
-  // Mantemos compatibilidade com o nome 'Fence' se o resto do app usa, 
-  // mas internamente tratamos como Geofence.
+  // --- Departments ---
+  async getDepartmentsByBranch(branchId: number) { return this.fetch<Department[]>(`/departments?branchId=${branchId}`); }
+  async addDepartment(item: Omit<Department, 'id'>) {
+      const res = await this.fetch<Department>('/departments', { method: 'POST', body: JSON.stringify(item) });
+      return res.id;
+  }
+
+  // --- People ---
+  async getPeopleByDepartment(departmentId: number) { return this.fetch<Person[]>(`/people?departmentId=${departmentId}`); }
+  async addPerson(item: Omit<Person, 'id'>) {
+      const res = await this.fetch<Person>('/people', { method: 'POST', body: JSON.stringify(item) });
+      return res.id;
+  }
+
+  // --- Geofences ---
   async getFences(): Promise<Geofence[]> {
-      // Nota: O app antigo espera 'coordinates' na Fence. 
-      // Se formos refatorar o app, devemos mudar a interface lá.
-      // Por enquanto retornamos Geofence puro.
-      return this.getAll<Geofence>('fences');
+      return this.fetch<Geofence[]>('/geofences');
   }
   
   async addFence(fence: Omit<Geofence, 'id'>): Promise<number> {
-      return this.add('fences', fence);
+      const res = await this.fetch<Geofence>('/geofences', { method: 'POST', body: JSON.stringify(fence) });
+      return res.id;
   }
   
   async updateFence(fence: Geofence): Promise<void> {
-      return this.put('fences', fence);
+      await this.fetch(`/geofences/${fence.id}`, { method: 'PUT', body: JSON.stringify(fence) });
   }
   
   async deleteFence(id: number): Promise<void> {
-      // Cascade delete perimeters/rules/pins?
-      // Por simplicidade, deletamos apenas a cerca.
-      return this.delete('fences', id);
+      await this.fetch(`/geofences/${id}`, { method: 'DELETE' });
   }
 
   // --- Perimeters ---
   async getAllPerimeters(): Promise<Perimeter[]> {
-      return this.getAll<Perimeter>('perimeters');
+      return this.fetch<Perimeter[]>('/perimeters');
   }
 
   async getPerimetersByFence(fenceId: number): Promise<Perimeter[]> {
-      return this.getByIndex<Perimeter>('perimeters', 'fenceId', fenceId);
+      return this.fetch<Perimeter[]>(`/perimeters?fenceId=${fenceId}`);
   }
   
   async addPerimeter(perimeter: Omit<Perimeter, 'id'>): Promise<number> {
-      return this.add('perimeters', perimeter);
+      // Use the specific endpoint if we want, or generic
+      const res = await this.fetch<Perimeter>('/perimeters', { method: 'POST', body: JSON.stringify(perimeter) });
+      return res.id;
   }
 
   async updatePerimeter(perimeter: Perimeter): Promise<void> {
-      return this.put('perimeters', perimeter);
+      await this.fetch(`/perimeters/${perimeter.id}`, { method: 'PUT', body: JSON.stringify(perimeter) });
   }
   
   async deletePerimeter(id: number): Promise<void> {
-      return this.delete('perimeters', id);
+      await this.fetch(`/perimeters/${id}`, { method: 'DELETE' });
   }
 
   // --- Rules ---
-  async getRules() { return this.getAll<Rule>('rules'); }
-  async getRulesByFence(fenceId: number) { return this.getByIndex<Rule>('rules', 'fenceId', fenceId); }
-  async addRule(rule: Omit<Rule, 'id'>) { return this.add('rules', rule); }
-  async updateRule(rule: Rule) { return this.put('rules', rule); }
-  async deleteRule(id: number) { return this.delete('rules', id); }
+  async getRules() { return this.fetch<Rule[]>('/rules'); }
+  async getRulesByFence(fenceId: number) { return this.fetch<Rule[]>(`/rules?fenceId=${fenceId}`); }
+  async addRule(rule: Omit<Rule, 'id'>) { 
+      const res = await this.fetch<Rule>('/rules', { method: 'POST', body: JSON.stringify(rule) });
+      return res.id;
+  }
+  async updateRule(rule: Rule) { await this.fetch(`/rules/${rule.id}`, { method: 'PUT', body: JSON.stringify(rule) }); }
+  async deleteRule(id: number) { await this.fetch(`/rules/${id}`, { method: 'DELETE' }); }
 
   // --- Pins ---
   async getAllPins(): Promise<GeofencePin[]> {
-      return this.getAll<GeofencePin>('geofence_pins');
+      return this.fetch<GeofencePin[]>('/geofence_pins');
   }
 
   async getPinsByFence(fenceId: number): Promise<GeofencePin[]> {
-      return this.getByIndex<GeofencePin>('geofence_pins', 'fenceId', fenceId);
+      return this.fetch<GeofencePin[]>(`/geofence_pins?fenceId=${fenceId}`);
   }
-  async addPin(pin: Omit<GeofencePin, 'id'>) { return this.add('geofence_pins', pin); }
-  async deletePin(id: number) { return this.delete('geofence_pins', id); }
+  async addPin(pin: Omit<GeofencePin, 'id'>) { 
+      const res = await this.fetch<GeofencePin>('/geofence_pins', { method: 'POST', body: JSON.stringify(pin) });
+      return res.id;
+  }
+  async deletePin(id: number) { await this.fetch(`/geofence_pins/${id}`, { method: 'DELETE' }); }
+
+  // --- Data Management (Not supported via API in this version) ---
+  async clearDatabase(): Promise<void> {
+    console.warn('clearDatabase not supported in API mode');
+  }
+
+  async exportDatabase(): Promise<any> {
+    console.warn('exportDatabase not supported in API mode');
+    return {};
+  }
+
+  async importDatabase(data: any): Promise<void> {
+    console.warn('importDatabase not supported in API mode');
+  }
 }
 
 export const dbService = new DatabaseService();
