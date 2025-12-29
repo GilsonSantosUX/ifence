@@ -1,0 +1,47 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  font-family: system-ui, Avenir, Helvetica, Arial, sans-serif;
+  line-height: 1.5;
+  font-weight: 400;
+}
+
+body {
+  margin: 0;
+  min-width: 320px;
+  min-height: 100vh;
+}
+
+/* Mapbox Geocoder Overrides for Orange Theme */
+.mapboxgl-ctrl-geocoder {
+  border: 1px solid #e5e7eb; /* gray-200 */
+  box-shadow: 0 1px 2px 0 rgb(0 0 0 / 0.05);
+  border-radius: 0.5rem; /* rounded-lg */
+}
+
+.mapboxgl-ctrl-geocoder:focus-within {
+  box-shadow: 0 0 0 2px #f97316; /* orange-500 */
+  border-color: transparent;
+}
+
+.mapboxgl-ctrl-geocoder--suggestion-title {
+  font-weight: 500;
+}
+
+.mapboxgl-ctrl-geocoder .suggestions > .active > a,
+.mapboxgl-ctrl-geocoder .suggestions > li > a:hover {
+  background-color: #fff7ed; /* orange-50 */
+  color: #c2410c; /* orange-700 */
+  text-decoration: none;
+  cursor: pointer;
+}
+
+.mapboxgl-ctrl-geocoder--icon-search {
+  fill: #9ca3af; /* gray-400 */
+}
+
+.mapboxgl-ctrl-geocoder--button {
+  background-color: transparent;
+}
